@@ -31,7 +31,7 @@ public class AccountController {
 	
 	 @GetMapping("/test")
 	    public String test() {
-	        return "Server working perfectly";
+	        return "Server is working perfectly";
 	    }
 	
 	//Add account rest API
