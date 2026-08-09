@@ -1,10 +1,9 @@
-name: Student API CI
+name: Banking API CI
 
 on:
   push:
     branches:
       - main
-      - feature-student-search
 
   pull_request:
     branches:
@@ -15,15 +14,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout source code
         uses: actions/checkout@v4
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: "21"
+          distribution: "temurin"
           cache: maven
 
       - name: Compile
