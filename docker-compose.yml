@@ -1,20 +1,98 @@
 version: "3.8"
 
+# =========================================================
+#  Docker Compose — Banking App
+#
+#  Usage:
+#    Stage:  docker compose --env-file .env.stage up
+#    Prod:   docker compose --env-file .env.prod  up
+#
+#  Copy .env.example to .env.stage / .env.prod and fill values.
+#  NEVER commit .env.stage or .env.prod to Git.
+# =========================================================
+
 services:
 
-  app:
-    image: springboot-app
-    build: .
-    container_name: app
+  # -------------------------------------------------------
+  #  MySQL Database
+  # -------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: banking-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "8081:8081"
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - banking-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
+  # -------------------------------------------------------
+  #  Spring Boot Application
+  # -------------------------------------------------------
+  app:
+    image: banking-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: banking-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # Profile — controls which application-{profile}.properties is loaded
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      # Database — passed from .env file, never hardcoded here
+      DB_HOST: mysql                      # service name acts as hostname in Docker network
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # App config
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+    ports:
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+    networks:
+      - banking-network
+
+  # -------------------------------------------------------
+  #  Nginx Reverse Proxy
+  # -------------------------------------------------------
   nginx:
-    image: nginx:latest
-    container_name: nginx
+    image: nginx:alpine
+    container_name: banking-nginx
+    restart: unless-stopped
+    depends_on:
+      - app
     ports:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - app
+    networks:
+      - banking-network
+
+# -------------------------------------------------------
+#  Volumes & Networks
+# -------------------------------------------------------
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  banking-network:
+    driver: bridge
